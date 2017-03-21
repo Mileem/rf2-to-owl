@@ -87,6 +87,9 @@ public class RF2Parser {
 	/** The Constant FSN_TYPE. */
 	private static final Object FSN_TYPE = "900000000000003001";
 
+	/** The Constant SYNONYM_TYPE. */
+	private static final Object SYNONYM_TYPE = "900000000000013009";
+
 	/** The Constant PREFERRED_ACCEPTABILITY. */
 	private static final Object PREFERRED_ACCEPTABILITY = "900000000000548007";
 
@@ -352,21 +355,21 @@ public class RF2Parser {
 							if ( spl[6].equals(FSN_TYPE)){
 								propA = factory.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
 
+							}else if(spl[6].equals(SYNONYM_TYPE)) {
+								propA = factory.getOWLAnnotationProperty("sctp:","synonym");
 							}else{
 								// just to add fsn
 								continue;
 								// ***************
 								//								Short acceptability=lang.get(did);
-								//								if (acceptability.equals(shortPreferred)){
-								//									propA = factory.getOWLAnnotationProperty("sctp:","en-us.preferred");
-								//								}else if (!hashRoles.containsKey(cid)){
+								//								if (!hashRoles.containsKey(cid)){
 								//									propA = factory.getOWLAnnotationProperty("sctp:","en-us.synonym");
 								//								}else{
 								//									continue;
 								//								}
 								// ***************
 							}
-							OWLAnnotation annotation = factory.getOWLAnnotation(propA,new OWLLiteralImpl(spl[7],"en",dtt));
+							OWLAnnotation annotation = factory.getOWLAnnotation(propA,new OWLLiteralImpl(spl[7],spl[5],dtt));
 							OWLAnnotationAssertionAxiom axiom = factory.getOWLAnnotationAssertionAxiom(cptIri, annotation);
 							manager.addAxiom(ont, axiom);
 
