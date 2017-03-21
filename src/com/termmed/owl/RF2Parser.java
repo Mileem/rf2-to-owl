@@ -155,6 +155,9 @@ public class RF2Parser {
 	/** The language file. */
 	private String languageFile;
 
+	/** The language extension file. */
+	private String extensionFile;
+
 	/** The short preferred. */
 	private Short shortPreferred=2;
 
@@ -170,11 +173,12 @@ public class RF2Parser {
 	 * @param descriptionFile the description file
 	 * @param textDefinitionFile the text definition file
 	 * @param languageFile the language file
+	 * @param extensionFile  the language extension file
 	 * @param outputFile the output file
 	 * @param iri the iri
 	 */
 	public RF2Parser(String conceptFile, String relationshipFile, String descriptionFile,
-			String textDefinitionFile,String languageFile,
+			String textDefinitionFile,String languageFile, String extensionFile,
 			String outputFile, String iri) {
 		super();
 		this.conceptFile = conceptFile;
@@ -182,6 +186,7 @@ public class RF2Parser {
 		this.descriptionFile=descriptionFile;
 		this.textDefinitionFile=textDefinitionFile;
 		this.languageFile=languageFile;
+		this.extensionFile=extensionFile;
 
 		this.outputFile = outputFile;
 		this.prefix=iri;
@@ -220,6 +225,7 @@ public class RF2Parser {
 
 		addRoles();
 		loadDescriptionsFile(descriptionFile,textDefinitionFile, languageFile);
+		loadExtensionFile(extensionFile);
 		System.out.println("Attribute count:" + attributes.size());
 
 		roleGroupProp=factory.getOWLObjectProperty(IRI
@@ -413,6 +419,65 @@ public class RF2Parser {
 						br.close();
 					}
 				}
+			}
+		}
+
+	}
+
+	/**
+	 * Load extension file
+	 *
+	 * @param extension the extension
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
+	private void loadExtensionFile(String extension) throws IOException {
+		if (extension!=null && !extension.equals("")){
+			File extensionFile = new File(extension);
+			if (extensionFile.exists()){
+				BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(extensionFile), "UTF8"));
+				br.readLine();
+				String line;
+				String[] spl;
+				Long cid;
+				Long did;
+				while ((line=br.readLine())!=null){
+					spl=line.split("\t",-1);
+					did=Long.parseLong(spl[0]);
+					if (spl[2].equals("1")){
+
+						cid=Long.parseLong(spl[4]);
+						if ( concepts.containsKey(cid) || hashRoles.containsKey(cid)){
+
+							IRI cptIri = IRI.create(prefix + cid);
+
+							OWLDatatypeImpl dtt=new OWLDatatypeImpl(OWL2Datatype.RDF_PLAIN_LITERAL.getIRI());
+							OWLAnnotationProperty propA ;
+							if ( spl[6].equals(FSN_TYPE)){
+								propA = factory.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
+
+							}else if(spl[6].equals(SYNONYM_TYPE)) {
+								propA = factory.getOWLAnnotationProperty("sctp:","synonym");
+							}else{
+								// just to add fsn
+								continue;
+								// ***************
+								//								Short acceptability=lang.get(did);
+								//								if (!hashRoles.containsKey(cid)){
+								//									propA = factory.getOWLAnnotationProperty("sctp:","en-us.synonym");
+								//								}else{
+								//									continue;
+								//								}
+								// ***************
+							}
+							OWLAnnotation annotation = factory.getOWLAnnotation(propA,new OWLLiteralImpl(spl[7],spl[5],dtt));
+							OWLAnnotationAssertionAxiom axiom = factory.getOWLAnnotationAssertionAxiom(cptIri, annotation);
+							manager.addAxiom(ont, axiom);
+
+						}
+
+					}
+				}
+				br.close();
 			}
 		}
 

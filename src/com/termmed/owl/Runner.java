@@ -42,6 +42,7 @@ public class Runner {
 		String descriptionFile = null;
 		String languageFile = null;
 		String textDefinitionFile = null;
+		String extensionFile = null;
 		if (args.length>=6){
 			descriptionFile = args[4];
 			languageFile = args[5];
@@ -49,11 +50,15 @@ public class Runner {
 		if (args.length>=7){
 			textDefinitionFile = args[6];
 		}
+        if (args.length>=8){
+            extensionFile = args[7];
+        }
 		RF2Parser parser = new RF2Parser(conceptFile
 				, relationshipFile
 				, descriptionFile
 				,textDefinitionFile
 				,languageFile
+                , extensionFile
 				, outputFile
 				, iri);
 
