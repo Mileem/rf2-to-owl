@@ -59,6 +59,8 @@ import com.termmed.rf2.model.LightRelationship;
 import uk.ac.manchester.cs.owl.owlapi.OWLDatatypeImpl;
 import uk.ac.manchester.cs.owl.owlapi.OWLLiteralImpl;
 
+import com.google.common.net.PercentEscaper;
+
 /**
  * The Class RF2Parser.
  *
@@ -68,6 +70,9 @@ public class RF2Parser {
 
 	/** The concepts. */
 	private Map<Long, ConceptDescriptor> concepts;
+
+	/** The metadata. */
+	private Map<Long, ConceptDescriptor> metadata;
 
 	/** The relationships. */
 	private Map<Long, HashMap<Integer, List<LightRelationship>>> relationships;
@@ -165,6 +170,10 @@ public class RF2Parser {
 	private Short shortAcceptable=3;
 
 	private String prefix;
+
+	private Boolean useFSN;
+
+	private PercentEscaper escaper;
 	/**
 	 * Instantiates a new r f2 parser.
 	 *
@@ -178,7 +187,7 @@ public class RF2Parser {
 	 * @param iri the iri
 	 */
 	public RF2Parser(String conceptFile, String relationshipFile, String descriptionFile,
-			String textDefinitionFile,String languageFile, String extensionFile,
+			String textDefinitionFile,String languageFile, Boolean useFSN, String extensionFile,
 			String outputFile, String iri) {
 		super();
 		this.conceptFile = conceptFile;
@@ -191,7 +200,10 @@ public class RF2Parser {
 		this.outputFile = outputFile;
 		this.prefix=iri;
 		this.iri = iri;
+		this.useFSN = useFSN;
+		this.escaper = new PercentEscaper("",true);
 		concepts = new HashMap<Long, ConceptDescriptor>();
+		metadata = new HashMap<Long, ConceptDescriptor>();
 		relationships = new HashMap<Long, HashMap<Integer,List<LightRelationship>>>();
 		wogroup=new HashSet<Long>();
 		wogroup.add(123005000l);
@@ -218,6 +230,9 @@ public class RF2Parser {
 		loadIsaRelationshipsFile(new File(relationshipFile));
 		loadRelationshipsFile(new File(relationshipFile));
 
+		if(useFSN) {
+			findFSN(descriptionFile);
+		}
 		manager = OWLManager.createOWLOntologyManager();
 		ontologyIRI = IRI.create(iri);
 		ont = manager.createOntology(ontologyIRI);
@@ -227,9 +242,12 @@ public class RF2Parser {
 		loadDescriptionsFile(descriptionFile,textDefinitionFile, languageFile);
 		loadExtensionFile(extensionFile);
 		System.out.println("Attribute count:" + attributes.size());
-
+		String termRoleGroup = prefix + ROLEGROUPSCTID;
+		if(useFSN) {
+			termRoleGroup = prefix + escaper.escape(metadata.get(ROLEGROUPSCTID).getDefaultTerm());
+		}
 		roleGroupProp=factory.getOWLObjectProperty(IRI
-				.create(prefix + ROLEGROUPSCTID));	
+				.create(termRoleGroup));
 		HashMap <Integer,List<LightRelationship>> listLR = new HashMap<Integer,List<LightRelationship>>();
 		List<LightRelationship> listIsas = new ArrayList<LightRelationship>();
 
@@ -238,7 +256,11 @@ public class RF2Parser {
 				continue;
 			}
 			boolean isPrim=(concepts.get(cptId).getDefinitionStatus().equals(PRIMITIVE));
-			OWLClass conceptClass = factory.getOWLClass(IRI.create(prefix + concepts.get(cptId).getConceptId()));
+			String conceptTerm = prefix + concepts.get(cptId).getConceptId();
+			if(useFSN) {
+				conceptTerm = prefix + escaper.escape(concepts.get(cptId).getDefaultTerm());
+			}
+			OWLClass conceptClass = factory.getOWLClass(IRI.create(conceptTerm));
 			listIsas = isarelationships.get(cptId);
 
 			OWLDeclarationAxiom declarationAxiom = factory
@@ -250,13 +272,20 @@ public class RF2Parser {
 				if (listIsas.size()==0){
 
 				}else if (listIsas.size()==1 && (listLR==null || (listLR!=null && listLR.size()==0))){
-					OWLClass targetClass = factory.getOWLClass(IRI.create(prefix + listIsas.get(0).getTarget()));
+					String term = prefix + listIsas.get(0).getTarget();
+					if(useFSN){
+						term = prefix + escaper.escape(concepts.get(listIsas.get(0).getTarget()).getDefaultTerm());
+					}
+					OWLClass targetClass = factory.getOWLClass(IRI.create(term));
 					manager.addAxiom(ont, factory.getOWLSubClassOfAxiom(conceptClass, targetClass));
 				}else{
 					Set<OWLClassExpression> set=new HashSet<OWLClassExpression>();
 					for (LightRelationship lrel : listIsas) {
-
-						OWLClass targetClass = factory.getOWLClass(IRI.create(prefix + lrel.getTarget()));
+						String term = prefix + lrel.getTarget();
+						if(useFSN) {
+							term = prefix + escaper.escape(concepts.get(lrel.getTarget()).getDefaultTerm());
+						}
+						OWLClass targetClass = factory.getOWLClass(IRI.create(term));
 						set.add(targetClass);
 
 					}
@@ -353,8 +382,13 @@ public class RF2Parser {
 
 						cid=Long.parseLong(spl[4]);
 						if ( concepts.containsKey(cid) || hashRoles.containsKey(cid)){
-
-							IRI cptIri = IRI.create(prefix + cid);
+							String term = prefix + cid;
+							if(useFSN && concepts.containsKey(cid)) {
+								term = prefix + escaper.escape(concepts.get(cid).getDefaultTerm());
+							} else if (useFSN && hashRoles.containsKey(cid)) {
+								term = prefix + escaper.escape(metadata.get(cid).getDefaultTerm());
+							}
+							IRI cptIri = IRI.create(term);
 
 							OWLDatatypeImpl dtt=new OWLDatatypeImpl(OWL2Datatype.RDF_PLAIN_LITERAL.getIRI());
 							OWLAnnotationProperty propA ;
@@ -398,8 +432,11 @@ public class RF2Parser {
 								cid=Long.parseLong(spl[4]);
 								if ( concepts.containsKey(cid)
 										&& !hashRoles.containsKey(cid)){
-
-									IRI cptIri = IRI.create(prefix + cid);
+									String term = prefix + cid;
+									if(useFSN) {
+										term = prefix + escaper.escape(concepts.get(cid).getDefaultTerm());
+									}
+									IRI cptIri = IRI.create(term);
 									OWLDatatypeImpl dtt=new OWLDatatypeImpl(OWL2Datatype.RDF_PLAIN_LITERAL.getIRI());
 									OWLAnnotationProperty propA ;
 									if ( spl[6].equals(TEXT_DEFINITION_TYPE)){
@@ -447,8 +484,13 @@ public class RF2Parser {
 
 						cid=Long.parseLong(spl[4]);
 						if ( concepts.containsKey(cid) || hashRoles.containsKey(cid)){
-
-							IRI cptIri = IRI.create(prefix + cid);
+							String term = prefix + cid;
+							if(useFSN && concepts.containsKey(cid)) {
+								term = prefix + escaper.escape(concepts.get(cid).getDefaultTerm());
+							} else if (useFSN && hashRoles.containsKey(cid)) {
+								term = prefix + escaper.escape(metadata.get(cid).getDefaultTerm());
+							}
+							IRI cptIri = IRI.create(term);
 
 							OWLDatatypeImpl dtt=new OWLDatatypeImpl(OWL2Datatype.RDF_PLAIN_LITERAL.getIRI());
 							OWLAnnotationProperty propA ;
@@ -497,8 +539,11 @@ public class RF2Parser {
 			if (grp==0){
 				listR=listLR.get(0);
 				for (LightRelationship lrel:listR){
-
-					OWLClass targetClass = factory.getOWLClass(IRI.create(prefix + lrel.getTarget()));
+					String term = prefix + lrel.getTarget();
+					if(useFSN) {
+						term = prefix + escaper.escape(concepts.get(lrel.getTarget()).getDefaultTerm());
+					}
+					OWLClass targetClass = factory.getOWLClass(IRI.create(term));
 					OWLObjectProperty property= hashRoles.get(lrel.getType());
 					OWLClassExpression role=factory.getOWLObjectSomeValuesFrom(property, targetClass);
 
@@ -514,8 +559,11 @@ public class RF2Parser {
 				HashSet<OWLClassExpression> setRoles = new HashSet<OWLClassExpression>();
 				listR=listLR.get(grp);
 				for (LightRelationship lrel:listR){
-
-					OWLClass targetClass = factory.getOWLClass(IRI.create(prefix + lrel.getTarget()));
+					String term = prefix + lrel.getTarget();
+					if(useFSN) {
+						term = prefix + escaper.escape(concepts.get(lrel.getTarget()).getDefaultTerm());
+					}
+					OWLClass targetClass = factory.getOWLClass(IRI.create(term));
 					OWLObjectProperty property= hashRoles.get(lrel.getType());
 					OWLClassExpression role=factory.getOWLObjectSomeValuesFrom(property, targetClass);
 					setRoles.add(role);
@@ -537,16 +585,28 @@ public class RF2Parser {
 
 		hashRoles=new HashMap<Long,OWLObjectProperty>();
 		for(Long concept:attributes){
+			String term = prefix + concept;
+			if(useFSN && concepts.containsKey(concept)) {
+				term = prefix + escaper.escape(concepts.get(concept).getDefaultTerm());
+			} else if (useFSN && metadata.containsKey(concept)) {
+				term = prefix + escaper.escape(metadata.get(concept).getDefaultTerm());
+			}
 			OWLObjectProperty property = factory.getOWLObjectProperty(IRI
-					.create(prefix + concept));	
+					.create(term));
 			OWLDeclarationAxiom declarationAxiom = factory
 					.getOWLDeclarationAxiom(property);
 			manager.addAxiom(ont, declarationAxiom);
 			if(rightIdent.containsKey(concept)){
 
 				long parentProp=rightIdent.get(concept);
+				String termParentProp = prefix + parentProp;
+				if(useFSN && concepts.containsKey(parentProp)) {
+					termParentProp = prefix + escaper.escape(concepts.get(parentProp).getDefaultTerm());
+				} else if (useFSN && metadata.containsKey(parentProp)) {
+					termParentProp = prefix + escaper.escape(metadata.get(parentProp).getDefaultTerm());
+				}
 				OWLObjectProperty superProperty = factory.getOWLObjectProperty(IRI
-						.create(prefix + parentProp));
+						.create(termParentProp));
 				List<OWLObjectProperty> lProp=new ArrayList<OWLObjectProperty>();
 				lProp.add(property);
 				lProp.add(superProperty);
@@ -572,9 +632,14 @@ public class RF2Parser {
 			for (LightRelationship rel:rels){
 				if (attribute.contains(rel.getTarget())){
 					attributes.add(rel.getSourceId());
-
+					String term = prefix + rel.getSourceId();
+					if(useFSN && concepts.containsKey(rel.getSourceId())) {
+						term = prefix + escaper.escape(concepts.get(rel.getSourceId()).getDefaultTerm());
+					} else if (useFSN && metadata.containsKey(rel.getSourceId())) {
+						term = prefix + escaper.escape(metadata.get(rel.getSourceId()).getDefaultTerm());
+					}
 					OWLObjectProperty subProperty = factory.getOWLObjectProperty(IRI
-							.create(prefix + rel.getSourceId()));
+							.create(term));
 
 					OWLDeclarationAxiom declarationAxiom = factory
 							.getOWLDeclarationAxiom(subProperty);
@@ -622,6 +687,19 @@ public class RF2Parser {
 					loopConcept.setModule(Long.parseLong(columns[3]));
 					loopConcept.setDefinitionStatus(columns[4]);
 					concepts.put(conceptId, loopConcept);
+					count++;
+					if (count % 100000 == 0) {
+						System.out.print(".");
+					}
+				} else if ( columns[2].equals("1") && columns[3].equals(METADATA_MODULE)){
+					ConceptDescriptor loopMetadata = new ConceptDescriptor();
+					Long conceptId = Long.parseLong(columns[0]);
+					loopMetadata.setConceptId(conceptId);
+					loopMetadata.setActive(columns[2].equals("1"));
+					loopMetadata.setEffectiveTime(columns[1]);
+					loopMetadata.setModule(Long.parseLong(columns[3]));
+					loopMetadata.setDefinitionStatus(columns[4]);
+					metadata.put(conceptId, loopMetadata);
 					count++;
 					if (count % 100000 == 0) {
 						System.out.print(".");
@@ -778,5 +856,31 @@ public class RF2Parser {
 			}
 		}
 		return false;
+	}
+
+	private void findFSN(String description) throws FileNotFoundException, IOException{
+		if (description!=null && !description.equals("")) {
+			File descriptionFile = new File(description);
+			BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(descriptionFile), "UTF8"));
+			try {
+				String line = br.readLine();
+				line = br.readLine(); // Skip header
+				Long cid;
+				while ((line = br.readLine()) != null) {
+					if (line.isEmpty()) {
+						continue;
+					}
+					String[] columns = line.split("\\t");
+					cid = Long.parseLong(columns[4]);
+					if (concepts.containsKey(cid) && columns[6].equals(FSN_TYPE)) {
+						concepts.get(cid).setDefaultTerm(columns[7]);
+					} else if(metadata.containsKey(cid) && columns[6].equals(FSN_TYPE)){
+						metadata.get(cid).setDefaultTerm(columns[7]);
+					}
+				}
+			} finally {
+				br.close();
+			}
+		}
 	}
 }

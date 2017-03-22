@@ -19,6 +19,8 @@
 
 package com.termmed.owl;
 
+import com.sun.org.apache.xpath.internal.operations.Bool;
+
 /**
  * Created by alo on 4/6/16.
  */
@@ -41,23 +43,29 @@ public class Runner {
 		String iri = args[3];
 		String descriptionFile = null;
 		String languageFile = null;
+        Boolean useFSN = false;
 		String textDefinitionFile = null;
 		String extensionFile = null;
 		if (args.length>=6){
 			descriptionFile = args[4];
 			languageFile = args[5];
+            if(args[6].equals("YES") || args[6].equals("yes") || args[6].equals("Y") || args[6].equals("y")) {
+                useFSN = true;
+            }
 		}
-		if (args.length>=7){
-			textDefinitionFile = args[6];
+		if (args.length>=8){
+			textDefinitionFile = args[7];
 		}
-        if (args.length>=8){
-            extensionFile = args[7];
+        if (args.length>=9){
+            extensionFile = args[8];
         }
+
 		RF2Parser parser = new RF2Parser(conceptFile
 				, relationshipFile
 				, descriptionFile
 				,textDefinitionFile
 				,languageFile
+                , useFSN
                 , extensionFile
 				, outputFile
 				, iri);
