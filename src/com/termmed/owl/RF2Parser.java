@@ -394,7 +394,10 @@ public class RF2Parser {
 							OWLAnnotationProperty propA ;
 							if ( spl[6].equals(FSN_TYPE)){
 								propA = factory.getOWLAnnotationProperty(OWLRDFVocabulary.RDFS_LABEL.getIRI());
-
+								OWLAnnotationProperty propB = factory.getOWLAnnotationProperty("sctp:","id");
+								OWLAnnotation annotationB = factory.getOWLAnnotation(propB,new OWLLiteralImpl(cid.toString(),spl[5],dtt));
+								OWLAnnotationAssertionAxiom axiomB = factory.getOWLAnnotationAssertionAxiom(cptIri, annotationB);
+								manager.addAxiom(ont, axiomB);
 							}else if(spl[6].equals(SYNONYM_TYPE)) {
 								propA = factory.getOWLAnnotationProperty("sctp:","synonym");
 							}else{
